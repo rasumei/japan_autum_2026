@@ -1,1 +1,0 @@
-# japan_autum_2026
