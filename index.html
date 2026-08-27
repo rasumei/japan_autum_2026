@@ -691,9 +691,23 @@ svg.leaflet-image-layer.leaflet-interactive path {
     background:var(--panel); border-radius:14px; box-shadow:var(--shadow);
     display:flex; flex-direction:column; overflow:hidden;
   }
-  .phead{ padding:14px 16px 10px; border-bottom:1px solid var(--line); flex:0 0 auto }
+  .phead{ padding:12px 14px 10px; border-bottom:1px solid var(--line); flex:0 0 auto }
+  .ptop{ display:flex; align-items:flex-start; justify-content:space-between; gap:10px }
+  .pttl{ min-width:0 }
   .ptitle{ font-size:16px; font-weight:700; letter-spacing:-.2px }
-  .psub{ font-size:11.5px; color:var(--ink-faint); margin-top:2px; letter-spacing:.02em }
+  .psub{ font-size:10.5px; color:var(--ink-faint); margin-top:3px; letter-spacing:.01em; white-space:nowrap }
+  .pctl{ display:flex; gap:5px; flex:0 0 auto }
+  .pctl button{
+    width:30px; height:30px; padding:0; border:1px solid var(--line); background:#FAF9F6;
+    border-radius:8px; cursor:pointer; color:var(--ink-soft);
+    display:flex; align-items:center; justify-content:center;
+  }
+  .pctl button svg{ width:16px; height:16px; display:block; transition:transform .18s ease }
+  .pctl button:hover{ border-color:var(--ink-faint); color:var(--ink) }
+  .pctl button:focus-visible{ outline:2px solid var(--tokyo); outline-offset:1px }
+  #panel.mini #miniBtn svg{ transform:rotate(180deg) }
+  #panel.mini .pbody, #panel.mini .pfoot{ display:none }
+  #panel.hidden{ display:none }
 
   .searchwrap{ position:relative; margin-top:10px }
   #search{
@@ -809,15 +823,19 @@ svg.leaflet-image-layer.leaflet-interactive path {
 
   #toggle{
     position:absolute; top:14px; left:14px; z-index:1001; display:none;
-    padding:9px 13px; border:none; border-radius:10px; background:var(--panel);
+    padding:10px 14px; border:none; border-radius:10px; background:var(--panel);
     box-shadow:var(--shadow); font:700 13px/1 inherit; color:var(--ink); cursor:pointer;
   }
-  @media (max-width:720px){
-    #panel{ width:calc(100vw - 20px); left:10px; top:10px; max-height:62vh }
-    #panel.hidden{ display:none }
-    #toggle{ display:block; top:10px; left:10px }
-    #toggle.shifted{ display:none }
-    .daygrid{ grid-template-columns:repeat(8,1fr) }
+  #toggle.show{ display:block }
+
+  /* Narrow screens: never let the panel own the whole viewport — the map has to
+     stay visible behind it, and the hide/collapse controls have to stay reachable. */
+  @media (max-width:860px){
+    #panel{ width:calc(100vw - 20px); left:10px; top:10px; max-height:52vh }
+    #toggle{ top:10px; left:10px }
+  }
+  @media (max-width:860px) and (max-height:620px){
+    #panel{ max-height:64vh }
   }
 </style>
 </head>
@@ -828,8 +846,22 @@ svg.leaflet-image-layer.leaflet-interactive path {
 
 <div id="panel">
   <div class="phead">
-    <div class="ptitle">16 Days in Japan</div>
-    <div class="psub">22 NOV – 7 DEC 2026 · CAMBODIA → JAPAN</div>
+    <div class="ptop">
+      <div class="pttl">
+        <div class="ptitle">16 Days in Japan</div>
+        <div class="psub">22 NOV – 7 DEC 2026 · CAMBODIA → JAPAN</div>
+      </div>
+      <div class="pctl">
+        <button id="miniBtn" type="button" aria-label="Collapse the list" title="Collapse the list">
+          <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2.2">
+            <path d="M5 8l5 5 5-5" stroke-linecap="round" stroke-linejoin="round"/></svg>
+        </button>
+        <button id="hideBtn" type="button" aria-label="Hide the panel" title="Hide the panel">
+          <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2.2">
+            <path d="M5 5l10 10M15 5L5 15" stroke-linecap="round"/></svg>
+        </button>
+      </div>
+    </div>
     <div class="searchwrap">
       <svg class="sicon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4">
         <circle cx="11" cy="11" r="7"/><path d="M20 20l-3.6-3.6" stroke-linecap="round"/>
@@ -880,12 +912,15 @@ svg.leaflet-image-layer.leaflet-interactive path {
   L.control.zoom({ position:"topright" }).addTo(map);
   L.control.scale({ imperial:false, position:"bottomright" }).addTo(map);
 
-  // keep the route clear of the itinerary panel when fitting bounds
+  function isNarrow(){ return window.innerWidth <= 860; }
+
+  // keep the route clear of the itinerary panel when fitting bounds — the panel
+  // sits beside the map on a desktop and above it on a phone
   function fitPad(){
     var panelEl = document.getElementById("panel");
-    var narrow = window.innerWidth <= 720;
-    if(narrow || panelEl.classList.contains("hidden")) return { tl:[30,30], br:[30,30] };
+    if(panelEl.classList.contains("hidden")) return { tl:[30,30], br:[30,40] };
     var r = panelEl.getBoundingClientRect();
+    if(isNarrow()) return { tl:[20, Math.round(r.bottom) + 16], br:[20, 44] };
     return { tl:[Math.round(r.right) + 24, 30], br:[40, 40] };
   }
   function fitTo(b, maxZoom){
@@ -1278,8 +1313,10 @@ svg.leaflet-image-layer.leaflet-interactive path {
     map.setView(e.marker.getLatLng(), Math.max(map.getZoom(), 15), { animate:true });
     // nudge so the pin lands in the map area the panel isn't covering
     var panelEl = document.getElementById("panel");
-    if(window.innerWidth > 720 && !panelEl.classList.contains("hidden")){
-      map.panBy([-Math.round(panelEl.getBoundingClientRect().right / 2), 0], { animate:false });
+    if(!panelEl.classList.contains("hidden")){
+      var r = panelEl.getBoundingClientRect();
+      if(isNarrow()) map.panBy([0, -Math.round(r.bottom / 2)], { animate:false });
+      else map.panBy([-Math.round(r.right / 2), 0], { animate:false });
     }
     e.marker.openPopup();
   }
@@ -1324,15 +1361,31 @@ svg.leaflet-image-layer.leaflet-interactive path {
     if(!ev.target.closest(".searchwrap")) results.style.display = "none";
   });
 
-  // ---- mobile panel toggle ----
+  // ---- panel show / collapse / hide ----
   var panel = document.getElementById("panel");
   var toggle = document.getElementById("toggle");
-  toggle.addEventListener("click", function(){
-    panel.classList.remove("hidden"); toggle.classList.add("shifted");
+  var hideBtn = document.getElementById("hideBtn");
+  var miniBtn = document.getElementById("miniBtn");
+
+  function hidePanel(){
+    panel.classList.add("hidden");
+    toggle.classList.add("show");
+  }
+  function showPanel(){
+    panel.classList.remove("hidden");
+    toggle.classList.remove("show");
+  }
+  hideBtn.addEventListener("click", hidePanel);
+  toggle.addEventListener("click", showPanel);
+  miniBtn.addEventListener("click", function(){
+    panel.classList.toggle("mini");
+    miniBtn.title = panel.classList.contains("mini") ? "Show the list" : "Collapse the list";
+    miniBtn.setAttribute("aria-label", miniBtn.title);
   });
-  map.on("click", function(){
-    if(window.innerWidth <= 720){ panel.classList.add("hidden"); toggle.classList.remove("shifted"); }
-  });
+  // tapping the map on a phone tucks the panel away too
+  map.on("click", function(){ if(isNarrow()) hidePanel(); });
+  // start collapsed on a phone so the map is visible from the first second
+  if(isNarrow()) panel.classList.add("mini");
 
   showAll();
 
